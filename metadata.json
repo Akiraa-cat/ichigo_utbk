@@ -1,6 +1,0 @@
-{
-  "name": "ICHIGO | UTBK 2027",
-  "description": "Jurnal belajar & analisis skor tryout UTBK 2027 bergaya manga dengan kalender kontribusi, jadwal subtes, dan pelacakan target PTN.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
