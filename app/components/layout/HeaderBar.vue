@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { User, Volume2, VolumeX } from '@lucide/vue'
 import { ICHIGO_LOGO_URL } from '~/utils/subtests.js'
 import { useApp } from '~/composables/useApp'
@@ -8,6 +8,10 @@ import { useBackgroundMusic } from '~/composables/useBackgroundMusic.js'
 const { route, activeTab, navigateTab, openSettings, pushToast } = useApp()
 const { isPlaying, toggleMusic } = useBackgroundMusic()
 const imgError = ref(false)
+
+onMounted(() => {
+  void toggleMusic()
+})
 
 const tabLabels = {
   beranda: 'Beranda',
