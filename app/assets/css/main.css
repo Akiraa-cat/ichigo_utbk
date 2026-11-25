@@ -114,6 +114,138 @@
   scrollbar-width: none;
 }
 
+.note-rich-text {
+  color: var(--color-ink);
+}
+
+.note-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  border-bottom: 2px solid var(--color-ink);
+  background: var(--color-surface-container-low);
+  padding: 0.5rem;
+}
+
+.note-editor-toolbar button {
+  display: inline-flex;
+  min-width: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  color: var(--color-ink);
+}
+
+.note-editor-toolbar button:hover,
+.note-editor-toolbar button.is-active {
+  border-color: var(--color-ink);
+  background: var(--color-manga-red-soft);
+  color: var(--color-manga-red-dark);
+}
+
+.note-toolbar-divider {
+  height: 1.5rem;
+  margin: 0 0.15rem;
+  border-left: 1px solid rgb(23 23 23 / 25%);
+}
+
+.note-editor-content {
+  background: var(--color-paper);
+}
+
+.note-editor-content .tiptap {
+  min-height: 18rem;
+  padding: 1rem;
+  outline: none;
+  font-size: 0.925rem;
+  line-height: 1.8;
+}
+
+.note-editor-readonly .tiptap {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 1rem;
+  line-height: 1.9;
+}
+
+.note-editor-content .tiptap > * + * {
+  margin-top: 0.75rem;
+}
+
+.note-editor-content .tiptap h1,
+.note-editor-content .tiptap h2 {
+  color: var(--color-manga-red-dark);
+  font-family: var(--font-condensed);
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.note-editor-content .tiptap h1 {
+  font-size: 1.65rem;
+}
+
+.note-editor-content .tiptap h2 {
+  font-size: 1.3rem;
+}
+
+.note-editor-content .tiptap ul,
+.note-editor-content .tiptap ol {
+  padding-left: 1.5rem;
+}
+
+.note-editor-content .tiptap ul {
+  list-style: disc;
+}
+
+.note-editor-content .tiptap ol {
+  list-style: decimal;
+}
+
+.note-editor-content .tiptap li {
+  margin-top: 0.35rem;
+}
+
+.note-editor-content .tiptap ul[data-type="taskList"] {
+  padding-left: 0;
+  list-style: none;
+}
+
+.note-editor-content .tiptap li[data-type="taskItem"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.note-editor-content .tiptap li[data-type="taskItem"] > label {
+  margin-top: 0.35rem;
+}
+
+.note-editor-content .tiptap li[data-type="taskItem"] input {
+  accent-color: var(--color-primary);
+}
+
+.note-editor-readonly .tiptap li[data-type="taskItem"] > label {
+  pointer-events: none;
+}
+
+.note-editor-content .tiptap hr {
+  border: 0;
+  border-top: 2px dashed rgb(23 23 23 / 25%);
+}
+
+.note-editor-content .tiptap p.is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  color: var(--color-ink-muted);
+  content: "Tulis refleksi di sini...";
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

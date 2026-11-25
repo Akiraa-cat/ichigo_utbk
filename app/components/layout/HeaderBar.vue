@@ -64,7 +64,7 @@ async function handleMusicToggle() {
             ICHIGO UTBK
           </span>
           <span class="text-[10px] text-ink-muted font-bold uppercase tracking-wider mt-0.5">
-            {{ route.type === 'settings' ? 'Pengaturan' : route.type === 'study_form' ? 'Sesi Belajar' : route.type === 'tryout_form' ? 'Input Nilai' : tabLabels[activeTab] }}
+            {{ route.type === 'settings' ? 'Pengaturan' : route.type === 'study_form' ? 'Sesi Belajar' : route.type === 'tryout_form' ? 'Input Nilai' : route.type.startsWith('note_') ? 'Memori Kesalahan' : tabLabels[activeTab] }}
           </span>
         </div>
         <span class="hidden sm:inline-block text-[10px] px-1.5 py-0.5 bg-manga-red-soft text-manga-red-dark font-bold tracking-wider rounded uppercase border border-primary/20">
@@ -78,7 +78,7 @@ async function handleMusicToggle() {
           :key="item.id"
           type="button"
           @click="navigateTab(item.id)"
-          :class="route.type === 'tab' && activeTab === item.id
+          :class="(route.type === 'tab' || route.type.startsWith('note_')) && activeTab === item.id
             ? 'bg-primary text-on-primary manga-shadow-sm border border-ink'
             : 'text-ink-muted hover:text-ink hover:bg-surface-container'"
           class="px-3.5 py-2 rounded-lg text-xs uppercase tracking-wider font-bold whitespace-nowrap transition-all cursor-pointer"

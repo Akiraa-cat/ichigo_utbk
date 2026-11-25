@@ -3,6 +3,7 @@ import {
   ArrowRight,
   BarChart3,
   Bolt,
+  BookOpen,
   Calendar,
   ChevronRight,
   Clock,
@@ -92,7 +93,7 @@ const todaySchedule = computed(() => schedules.value[todayIso.value]?.activities
           </span>
         </div>
         <h1 class="font-bebas text-[30px] md:text-[36px] uppercase tracking-normal text-ink mt-0.5 leading-none">
-          MOSHI MOSHI!
+          MOSHI MOSHI, AKIRAA!
         </h1>
       </div>
       <div class="px-3 py-1.5 bg-surface rounded-lg border-2 border-ink manga-shadow-sm flex items-center gap-1.5 shrink-0">
@@ -218,6 +219,19 @@ const todaySchedule = computed(() => schedules.value[todayIso.value]?.activities
             <span>CATAT BELAJAR</span>
           </button>
         </div>
+
+        <NuxtLink to="/memori" class="group flex items-center justify-between gap-3 rounded-xl border-2 border-ink border-l-[5px] border-l-primary bg-surface p-3 manga-shadow-sm transition-colors hover:bg-manga-red-soft/30">
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-ink/20 bg-manga-red-soft text-primary">
+              <BookOpen class="h-[18px] w-[18px]" />
+            </div>
+            <div class="min-w-0">
+              <span class="block font-condensed text-base font-bold uppercase leading-tight text-ink">Memori Kesalahan</span>
+              <span class="block text-[11px] leading-snug text-ink-muted">Buka kembali refleksi latihanmu.</span>
+            </div>
+          </div>
+          <ArrowRight class="h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-0.5" />
+        </NuxtLink>
       </div>
 
       <!-- RIGHT COLUMN -->

@@ -9,3 +9,4 @@ coverage/
 .nuxt/
 .output/
 .data/
+.vercel

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute } from '#imports'
-import { ArrowLeft, Calendar, CheckCircle2, PlusCircle, Save, Trash2 } from '@lucide/vue'
+import { ArrowLeft, Calendar, CheckCircle2, LoaderCircle, PlusCircle, Save, Trash2 } from '@lucide/vue'
 import { useApp } from '~/composables/useApp'
 import { SUBTEST_ORDER } from '~/utils/subtests.js'
 import { getTodayIso } from '~/utils/dateUtils.js'
@@ -32,6 +32,7 @@ const date = ref(existing.value?.date ?? getTodayIso(settings.value.timezone || 
 const scores = ref(existing.value?.scores ?? Object.fromEntries(SUBTEST_ORDER.map((code) => [code, null])))
 const averageScore = ref(existing.value?.averageScore ?? null)
 const notes = ref(existing.value?.notes ?? '')
+const saving = ref(false)
 const computedMean = computed(() => {
   const values = SUBTEST_ORDER.map((code) => scores.value[code])
   if (values.some((value) => value === null || value === undefined || value === '')) return null
@@ -51,17 +52,22 @@ function handleScoreChange(code, value) {
 }
 
 async function handleSubmit() {
-  if (!platformId.value) return
-  if (await saveTryout({
-    id: existing.value?.id,
-    applicationId: platformId.value,
-    title: title.value.trim(),
-    date: date.value,
-    averageScore: Number(averageScore.value),
-    scores: scores.value,
-    notes: notes.value.trim(),
-  })) {
-    goBackToTab()
+  if (!platformId.value || saving.value) return
+  saving.value = true
+  try {
+    if (await saveTryout({
+      id: existing.value?.id,
+      applicationId: platformId.value,
+      title: title.value.trim(),
+      date: date.value,
+      averageScore: Number(averageScore.value),
+      scores: scores.value,
+      notes: notes.value.trim(),
+    })) {
+      goBackToTab()
+    }
+  } finally {
+    saving.value = false
   }
 }
 
@@ -71,7 +77,9 @@ function confirmDelete() {
     description: `Nilai ${existing.value.title} akan dihapus permanen.`,
     confirmLabel: 'Ya, Hapus',
     onConfirm: async () => {
-      if (await deleteTryout(existing.value.id)) goBackToTab()
+      const deleted = await deleteTryout(existing.value.id)
+      if (deleted) goBackToTab()
+      return deleted
     },
   })
 }
@@ -162,9 +170,10 @@ function confirmDelete() {
     </section>
 
     <div class="flex gap-2">
-      <button type="submit" :disabled="!platforms.length" class="flex-1 h-12 bg-primary text-on-primary font-condensed text-lg font-bold uppercase rounded-xl border-2 border-ink manga-shadow flex items-center justify-center gap-2 disabled:opacity-50">
-        <Save class="w-5 h-5" />
-        SIMPAN NILAI
+      <button type="submit" :disabled="saving || !platforms.length" class="flex-1 h-12 bg-primary text-on-primary font-condensed text-lg font-bold uppercase rounded-xl border-2 border-ink manga-shadow flex items-center justify-center gap-2 disabled:opacity-50">
+        <LoaderCircle v-if="saving" class="w-5 h-5 animate-spin motion-reduce:animate-none" />
+        <Save v-else class="w-5 h-5" />
+        {{ saving ? 'MENYIMPAN...' : 'SIMPAN NILAI' }}
       </button>
       <button v-if="existing" type="button" class="h-12 px-4 bg-manga-red-soft text-manga-red-dark border-2 border-ink rounded-xl" @click="confirmDelete">
         <Trash2 class="w-5 h-5" />

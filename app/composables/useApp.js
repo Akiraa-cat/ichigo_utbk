@@ -37,6 +37,22 @@ const toNumberOrNull = (value) => {
   return Number.isFinite(number) ? number : null
 }
 
+function mapSettings(rawSettings) {
+  return {
+    targetDate: rawSettings.exam_date || '',
+    targetScore: toNumberOrNull(rawSettings.target_score),
+    targetUniversity: rawSettings.target_university || '',
+    targetMajor: rawSettings.target_major || '',
+    focusSubtests: String(rawSettings.focus_subtests || '')
+      .split(',')
+      .map((code) => code.trim())
+      .filter(Boolean),
+    dailyTargetMinutes: toNumberOrNull(rawSettings.daily_study_target),
+    pomodoroMinutes: toNumberOrNull(rawSettings.preferred_session_duration),
+    timezone: rawSettings.timezone || '',
+  }
+}
+
 function mapData(data) {
   const applications = data.applications.map((item) => ({
     id: item.application_id,
@@ -64,20 +80,7 @@ function mapData(data) {
     schedules[item.schedule_date].activities.push(item.activity_code)
   })
 
-  const rawSettings = data.settings
-  const settings = {
-    targetDate: rawSettings.exam_date || '',
-    targetScore: toNumberOrNull(rawSettings.target_score),
-    targetUniversity: rawSettings.target_university || '',
-    targetMajor: rawSettings.target_major || '',
-    focusSubtests: String(rawSettings.focus_subtests || '')
-      .split(',')
-      .map((code) => code.trim())
-      .filter(Boolean),
-    dailyTargetMinutes: toNumberOrNull(rawSettings.daily_study_target),
-    pomodoroMinutes: toNumberOrNull(rawSettings.preferred_session_duration),
-    timezone: rawSettings.timezone || '',
-  }
+  const settings = mapSettings(data.settings)
   const tryouts = data.tryouts.map((item) => ({
     id: item.tryout_id,
     applicationId: item.application_id,
@@ -117,10 +120,16 @@ export function useApp() {
   const currentRoute = useRoute()
   const initialized = useState('ichigo-app-initialized', () => false)
   const isLoadingSkeleton = useState('ichigo-app-loading', () => true)
+  const isRefreshing = useState('ichigo-app-refreshing', () => false)
   const dataError = useState('ichigo-app-error', () => '')
+  const refreshError = useState('ichigo-app-refresh-error', () => '')
+  const loadRequestId = useState('ichigo-app-load-request', () => 0)
+  const pendingRequestIds = useState('ichigo-pending-request-ids', () => ({}))
   const activeTab = useState(
     'ichigo-active-tab',
-    () => Object.keys(TAB_PATHS).find((tab) => TAB_PATHS[tab] === currentRoute.path) || 'beranda',
+    () => currentRoute.path.startsWith('/memori')
+      ? 'beranda'
+      : Object.keys(TAB_PATHS).find((tab) => TAB_PATHS[tab] === currentRoute.path) || 'beranda',
   )
   const toasts = useState('ichigo-toasts', () => [])
   const confirmDialog = useState('ichigo-confirm-dialog', () => null)
@@ -128,6 +137,9 @@ export function useApp() {
   const editingApplication = useState('ichigo-edit-application', () => null)
   const route = computed(() => {
     if (currentRoute.path === '/settings') return { type: 'settings' }
+    if (currentRoute.path === '/memori') return { type: 'tab', tab: 'beranda' }
+    if (currentRoute.path === '/memori/tulis') return { type: 'note_form' }
+    if (currentRoute.path.startsWith('/memori/')) return { type: 'note_detail' }
     if (currentRoute.path === '/agenda/session') {
       return {
         type: 'study_form',
@@ -150,6 +162,7 @@ export function useApp() {
     () => currentRoute.path,
     () => {
       if (route.value.tab) activeTab.value = route.value.tab
+      else if (currentRoute.path.startsWith('/memori')) activeTab.value = 'beranda'
       if (import.meta.client) window.scrollTo({ top: 0, behavior: 'smooth' })
     },
   )
@@ -163,50 +176,200 @@ export function useApp() {
   function pushToast(toast) {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
     toasts.value = [...toasts.value.slice(-2), { ...toast, id }]
-    toastTimers.set(id, setTimeout(() => dismissToast(id), 3600))
+    if (toast.type !== 'error') {
+      toastTimers.set(id, setTimeout(() => dismissToast(id), toast.type === 'warning' ? 6000 : 3600))
+    }
+  }
+
+  function createRequestId() {
+    const cryptoApi = globalThis.crypto
+    if (cryptoApi?.randomUUID) return cryptoApi.randomUUID()
+    if (!cryptoApi?.getRandomValues) throw new Error('Browser tidak mendukung pembuatan ID request yang aman.')
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(16))
+    bytes[6] = (bytes[6] & 0x0f) | 0x40
+    bytes[8] = (bytes[8] & 0x3f) | 0x80
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  }
+
+  function requestFingerprint(params) {
+    return JSON.stringify(params)
+  }
+
+  function getRequestId(action, params) {
+    const fingerprint = requestFingerprint(params)
+    const existing = pendingRequestIds.value[action]
+    if (existing?.fingerprint === fingerprint) return existing.requestId
+    const requestId = createRequestId()
+    pendingRequestIds.value = {
+      ...pendingRequestIds.value,
+      [action]: { fingerprint, requestId },
+    }
+    return requestId
+  }
+
+  function completeRequestId(action, params) {
+    const current = pendingRequestIds.value[action]
+    if (!current || current.fingerprint !== requestFingerprint(params)) return
+    const next = { ...pendingRequestIds.value }
+    delete next[action]
+    pendingRequestIds.value = next
   }
 
   async function loadData() {
-    isLoadingSkeleton.value = true
-    dataError.value = ''
+    const requestId = ++loadRequestId.value
+    const initialLoad = !initialized.value
+    if (initialLoad) dataError.value = ''
+    else refreshError.value = ''
+    isLoadingSkeleton.value = initialLoad
+    isRefreshing.value = !initialLoad
     try {
-      const data = await $fetch('/api/app-data')
+      const data = await $fetch('/api/app-data', { timeout: 30000 })
+      if (requestId !== loadRequestId.value) return false
       Object.assign(state.value, mapData(data))
       initialized.value = true
+      dataError.value = ''
+      refreshError.value = ''
       return true
     } catch (error) {
-      dataError.value = error?.data?.statusMessage || error?.statusMessage || error?.message || 'Data gagal dimuat.'
+      if (requestId !== loadRequestId.value) return false
+      const message = error?.data?.statusMessage || error?.statusMessage || error?.message || 'Data gagal dimuat.'
+      if (initialLoad) dataError.value = message
+      else refreshError.value = message
       return false
     } finally {
-      isLoadingSkeleton.value = false
+      if (requestId === loadRequestId.value) {
+        isLoadingSkeleton.value = false
+        isRefreshing.value = false
+      }
     }
   }
 
   async function mutate(action, params) {
-    dataError.value = ''
     try {
-      await requestMutation(action, params)
-      if (!(await loadData())) {
-        pushToast({
-          type: 'error',
-          title: 'Pembaruan Belum Tampil',
-          subtitle: 'Perubahan telah dikirim, tetapi data terbaru gagal dimuat.',
-        })
-        return false
-      }
+      const response = await requestMutation(action, params)
+      applyMutationResult(action, params, response)
+      await loadData()
       return true
     } catch (error) {
-      dataError.value = error?.data?.statusMessage || error?.statusMessage || error?.message || 'Perubahan gagal disimpan.'
-      pushToast({ type: 'error', title: 'Gagal Menyimpan', subtitle: dataError.value })
+      const message = error?.data?.statusMessage || error?.statusMessage || error?.message || 'Perubahan gagal disimpan.'
+      pushToast({ type: 'error', title: 'Gagal Menyimpan', subtitle: message })
       return false
     }
   }
 
-  function requestMutation(action, params) {
-    return $fetch('/api/apps-script', {
+  async function requestMutation(action, params) {
+    const requestId = getRequestId(action, params)
+    const body = { action, ...params, request_id: requestId }
+    const result = await $fetch('/api/apps-script', {
       method: 'POST',
-      body: { action, ...params },
+      body,
+      timeout: 30000,
     })
+    completeRequestId(action, params)
+    return result
+  }
+
+  function applyMutationResult(action, params, response) {
+    if (action === 'saveSession' && response?.session_id) {
+      const saved = {
+        id: response.session_id,
+        date: response.study_date,
+        startTime: response.start_time,
+        durationMinutes: toNumberOrNull(response.duration_minutes),
+        subtests: response.subtests || [],
+        notes: response.notes || '',
+      }
+      state.value.sessions = [
+        ...state.value.sessions.filter((item) => item.id !== saved.id),
+        saved,
+      ]
+      return
+    }
+
+    if (action === 'deleteSession') {
+      state.value.sessions = state.value.sessions.filter((item) => item.id !== params.session_id)
+      return
+    }
+
+    if (action === 'saveTryout' && response?.tryout_id) {
+      const application = state.value.applications.find(
+        (item) => item.id === response.application_id,
+      )
+      const saved = {
+        id: response.tryout_id,
+        applicationId: response.application_id,
+        applicationName: application?.name,
+        applicationColor: application?.colorHex,
+        title: response.tryout_name,
+        date: response.tryout_date,
+        averageScore: toNumberOrNull(response.overall_score),
+        scores: Object.fromEntries(
+          SUBTEST_CODES.map((code) => [code, toNumberOrNull(response[code])]),
+        ),
+        notes: response.notes || '',
+      }
+      state.value.tryouts = [
+        ...state.value.tryouts.filter((item) => item.id !== saved.id),
+        saved,
+      ]
+      return
+    }
+
+    if (action === 'deleteTryout') {
+      state.value.tryouts = state.value.tryouts.filter((item) => item.id !== params.tryout_id)
+      return
+    }
+
+    if (action === 'saveApplication' && response?.application_id) {
+      const saved = {
+        id: response.application_id,
+        name: response.application_name,
+        colorHex: response.chart_color,
+      }
+      const applications = [
+        ...state.value.applications.filter((item) => item.id !== saved.id),
+        saved,
+      ]
+      state.value.applications = applications
+      state.value.platforms = applications
+      state.value.tryouts = state.value.tryouts.map((tryout) => {
+        const application = applications.find((item) => item.id === tryout.applicationId)
+        return {
+          ...tryout,
+          applicationName: application?.name,
+          applicationColor: application?.colorHex,
+        }
+      })
+      return
+    }
+
+    if (action === 'deleteApplication') {
+      const applications = state.value.applications.filter((item) => item.id !== params.application_id)
+      state.value.applications = applications
+      state.value.platforms = applications
+      state.value.tryouts = state.value.tryouts.map((tryout) => (
+        tryout.applicationId === params.application_id
+          ? { ...tryout, applicationName: undefined, applicationColor: undefined }
+          : tryout
+      ))
+      return
+    }
+
+    if (action === 'saveSettings' && response) {
+      state.value.settings = mapSettings(response)
+    }
+  }
+
+  function rebuildScheduleIndex() {
+    const schedules = {}
+    state.value.scheduleEntries.forEach((entry) => {
+      if (!schedules[entry.schedule_date]) {
+        schedules[entry.schedule_date] = { date: entry.schedule_date, activities: [] }
+      }
+      schedules[entry.schedule_date].activities.push(entry.activity_code)
+    })
+    state.value.schedules = schedules
   }
 
   function navigateTab(tab) {
@@ -318,27 +481,29 @@ export function useApp() {
       const additions = activities.filter((code) => !currentCodes.has(code))
       for (const entry of removals) {
         await requestMutation('deleteScheduleEntry', { schedule_id: entry.schedule_id })
+        state.value.scheduleEntries = state.value.scheduleEntries.filter(
+          (item) => item.schedule_id !== entry.schedule_id,
+        )
+        rebuildScheduleIndex()
       }
       for (const code of additions) {
-        await requestMutation('saveScheduleEntry', {
+        const saved = await requestMutation('saveScheduleEntry', {
           data: { schedule_date: date, activity_code: code },
         })
+        if (saved?.schedule_id) {
+          state.value.scheduleEntries = [
+            ...state.value.scheduleEntries.filter((item) => item.schedule_id !== saved.schedule_id),
+            saved,
+          ]
+          rebuildScheduleIndex()
+        }
       }
-      if (!(await loadData())) {
-        pushToast({
-          type: 'error',
-          title: 'Pembaruan Belum Tampil',
-          subtitle: 'Perubahan telah dikirim, tetapi data terbaru gagal dimuat.',
-        })
-        return false
-      }
+      await loadData()
       pushToast({ type: 'success', title: 'Jadwal Tersimpan', subtitle: 'Perubahan jadwal tersimpan di database.' })
       return true
     } catch (error) {
       const message = error?.data?.statusMessage || error?.statusMessage || error?.message || 'Jadwal gagal disimpan.'
-      await loadData()
-      dataError.value = message
-      pushToast({ type: 'error', title: 'Gagal Menyimpan Jadwal', subtitle: dataError.value })
+      pushToast({ type: 'error', title: 'Gagal Menyimpan Jadwal', subtitle: message })
       return false
     }
   }
@@ -359,29 +524,6 @@ export function useApp() {
     return saved
   }
 
-  function exportTryoutsCsv() {
-    const header = ['tryout_date', 'application_name', 'tryout_name', 'overall_score', ...SUBTEST_CODES]
-    const rows = state.value.tryouts.map((item) => [
-      item.date,
-      `"${item.applicationName || ''}"`,
-      `"${String(item.title || '').replaceAll('"', '""')}"`,
-      item.averageScore ?? '',
-      ...SUBTEST_CODES.map((code) => item.scores[code] ?? ''),
-    ].join(','))
-    const blob = new Blob([[header.join(','), ...rows].join('\n')], {
-      type: 'text/csv;charset=utf-8;',
-    })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'tryout-scores.csv'
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
-    pushToast({ type: 'success', title: 'Ekspor CSV Selesai', subtitle: `${state.value.tryouts.length} data tryout diekspor.` })
-  }
-
   return {
     ...fields,
     initialized,
@@ -394,6 +536,8 @@ export function useApp() {
     openSettings,
     goBackToTab,
     loadData,
+    isRefreshing,
+    refreshError,
     getActivity,
     saveSession,
     deleteSession,
@@ -405,9 +549,10 @@ export function useApp() {
     deletePlatform,
     saveDaySchedule,
     updateSettings,
-    exportTryoutsCsv,
     toasts,
     pushToast,
+    getRequestId,
+    completeRequestId,
     dismissToast,
     confirmDialog,
     askConfirm: (dialog) => {

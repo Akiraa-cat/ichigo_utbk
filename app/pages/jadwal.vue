@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  LoaderCircle,
   Megaphone,
   PlusCircle,
   Save,
@@ -30,6 +31,7 @@ const viewMonth = ref(initialMonth)
 const selectedIso = ref(todayIso)
 const sheetOpen = ref(false)
 const draftActivities = ref([])
+const savingSchedule = ref(false)
 
 const cells = computed(() => buildMonthGrid(viewYear.value, viewMonth.value))
 const selectedActivities = computed(() => schedules.value[selectedIso.value]?.activities ?? [])
@@ -62,8 +64,14 @@ function toggleDraftActivity(code) {
 }
 
 async function handleSaveSchedule() {
-  if (await saveDaySchedule(selectedIso.value, draftActivities.value)) {
-    sheetOpen.value = false
+  if (savingSchedule.value) return
+  savingSchedule.value = true
+  try {
+    if (await saveDaySchedule(selectedIso.value, draftActivities.value)) {
+      sheetOpen.value = false
+    }
+  } finally {
+    savingSchedule.value = false
   }
 }
 
@@ -483,11 +491,13 @@ function handleNextMonth() {
           </button>
           <button
             type="button"
-            class="flex-1 h-12 rounded-lg bg-primary text-surface font-bebas text-lg tracking-wider uppercase border-2 border-ink manga-shadow flex items-center justify-center gap-2 cursor-pointer"
+            :disabled="savingSchedule"
+            class="flex-1 h-12 rounded-lg bg-primary text-surface font-bebas text-lg tracking-wider uppercase border-2 border-ink manga-shadow flex items-center justify-center gap-2 cursor-pointer disabled:cursor-wait disabled:opacity-60"
             @click="handleSaveSchedule"
           >
-            <Save class="w-5 h-5" />
-            <span>SIMPAN JADWAL ({{ draftActivities.length }})</span>
+            <LoaderCircle v-if="savingSchedule" class="w-5 h-5 animate-spin motion-reduce:animate-none" />
+            <Save v-else class="w-5 h-5" />
+            <span>{{ savingSchedule ? 'MENYIMPAN...' : `SIMPAN JADWAL (${draftActivities.length})` }}</span>
           </button>
         </div>
       </div>

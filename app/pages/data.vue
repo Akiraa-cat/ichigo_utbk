@@ -2,8 +2,8 @@
 import {
   CloudUpload,
   Database,
-  Download,
   Edit3,
+  FileText,
   PlusSquare,
   Search,
   ShieldCheck,
@@ -23,11 +23,12 @@ const {
   deleteTryout,
   openTryoutForm,
   askConfirm,
-  exportTryoutsCsv,
 } = useApp()
 
 const searchQuery = ref('')
 const filterPfId = ref('ALL')
+const exportingPdf = ref(false)
+const exportPdfError = ref('')
 const totalStudyHours = computed(() =>
   Math.round(sessions.value.reduce((acc, session) => acc + session.durationMinutes, 0) / 60),
 )
@@ -46,6 +47,34 @@ const filteredTryouts = computed(() => {
       )
     })
 })
+const selectedApplicationName = computed(() =>
+  filterPfId.value === 'ALL'
+    ? 'Semua aplikasi'
+    : platforms.value.find((platform) => platform.id === filterPfId.value)?.name || 'Aplikasi terpilih',
+)
+
+async function exportScoreReportPdf() {
+  if (exportingPdf.value || filteredTryouts.value.length === 0) return
+
+  exportingPdf.value = true
+  exportPdfError.value = ''
+
+  try {
+    const { buildTryoutScoreReport } = await import('~/utils/tryoutReportPdf.js')
+    const { doc, filename } = await buildTryoutScoreReport(filteredTryouts.value, {
+      targetScore: settings.value.targetScore,
+      timeZone: settings.value.timezone,
+      applicationFilter: selectedApplicationName.value,
+      searchTerm: searchQuery.value.trim(),
+    })
+    doc.save(filename)
+  } catch (error) {
+    console.error('Failed to generate Try Out score report PDF.', error)
+    exportPdfError.value = 'Laporan PDF gagal disiapkan. Silakan coba lagi.'
+  } finally {
+    exportingPdf.value = false
+  }
+}
 </script>
 
 <template>
@@ -177,15 +206,22 @@ const filteredTryouts = computed(() => {
           </div>
 
           <div class="grid grid-cols-2 gap-2.5">
-            <button type="button" @click="exportTryoutsCsv" class="h-10 bg-surface-container text-ink font-condensed text-sm font-bold uppercase tracking-wide rounded-lg border border-ink flex items-center justify-center gap-1.5 manga-shadow-sm active:translate-y-0.5 cursor-pointer">
-              <Download class="w-4 h-4" />
-              <span>Ekspor CSV</span>
+            <button type="button" :disabled="exportingPdf || filteredTryouts.length === 0" @click="exportScoreReportPdf" class="h-10 bg-surface-container text-ink font-condensed text-sm font-bold uppercase tracking-wide rounded-lg border border-ink flex items-center justify-center gap-1.5 manga-shadow-sm active:translate-y-0.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60">
+              <span v-if="exportingPdf" class="h-4 w-4 animate-spin rounded-full border-2 border-ink border-t-transparent" aria-hidden="true" />
+              <FileText v-else class="w-4 h-4" />
+              <span>{{ exportingPdf ? 'Menyiapkan laporan...' : 'Ekspor PDF' }}</span>
             </button>
             <button type="button" @click="openTryoutForm()" class="h-10 bg-ink text-surface font-condensed text-sm font-bold uppercase tracking-wide rounded-lg border border-ink flex items-center justify-center gap-1.5 manga-shadow-sm active:translate-y-0.5 cursor-pointer">
               <PlusSquare class="w-4 h-4" />
               <span>Tambah Tryout</span>
             </button>
           </div>
+          <p v-if="!filteredTryouts.length" class="text-[11px] leading-snug text-ink-muted">
+            Tidak ada data Try Out untuk filter aktif; laporan PDF tidak dapat dibuat.
+          </p>
+          <p v-if="exportPdfError" role="alert" class="text-[11px] leading-snug text-manga-red-dark">
+            {{ exportPdfError }}
+          </p>
         </div>
       </div>
 

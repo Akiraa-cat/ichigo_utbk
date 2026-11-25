@@ -1,11 +1,12 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { ArrowLeft, Calendar, Check, Clock, Flag, GraduationCap, Hourglass, Save } from '@lucide/vue'
+import { ArrowLeft, Calendar, Check, Clock, Flag, GraduationCap, Hourglass, LoaderCircle, Save } from '@lucide/vue'
 import { useApp } from '~/composables/useApp'
 import { SUBTEST_ORDER } from '~/utils/subtests.js'
 
 const { settings, activityTypes, updateSettings, goBackToTab } = useApp()
 const draft = ref({ ...settings.value, focusSubtests: [...settings.value.focusSubtests] })
+const saving = ref(false)
 const availableSubtests = computed(() =>
   activityTypes.value.filter((activity) => SUBTEST_ORDER.includes(activity.code)),
 )
@@ -18,7 +19,13 @@ function toggleFocusSubtest(code) {
 }
 
 async function handleSave() {
-  if (await updateSettings(draft.value)) goBackToTab()
+  if (saving.value) return
+  saving.value = true
+  try {
+    if (await updateSettings(draft.value)) goBackToTab()
+  } finally {
+    saving.value = false
+  }
 }
 </script>
 
@@ -120,12 +127,13 @@ async function handleSave() {
       </section>
 
       <div class="flex items-center gap-3">
-        <button type="button" @click="goBackToTab" class="w-28 py-3 rounded-lg bg-surface-container text-ink font-condensed text-base font-bold border-2 border-ink manga-shadow-sm">
+        <button type="button" :disabled="saving" @click="goBackToTab" class="w-28 py-3 rounded-lg bg-surface-container text-ink font-condensed text-base font-bold border-2 border-ink manga-shadow-sm disabled:opacity-50">
           BATAL
         </button>
-        <button type="submit" class="flex-1 py-3 rounded-lg bg-primary text-on-primary font-condensed text-base font-bold border-2 border-ink manga-shadow flex items-center justify-center gap-2">
-          <Save class="w-5 h-5" />
-          SIMPAN PERUBAHAN
+        <button type="submit" :disabled="saving" class="flex-1 py-3 rounded-lg bg-primary text-on-primary font-condensed text-base font-bold border-2 border-ink manga-shadow flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-60">
+          <LoaderCircle v-if="saving" class="w-5 h-5 animate-spin motion-reduce:animate-none" />
+          <Save v-else class="w-5 h-5" />
+          {{ saving ? 'MENYIMPAN...' : 'SIMPAN PERUBAHAN' }}
         </button>
       </div>
     </form>

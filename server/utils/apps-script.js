@@ -23,8 +23,35 @@ export async function callAppsScript(event, action, params = {}, method = 'GET')
     options.body = JSON.stringify({ action, ...params })
   }
 
-  const response = await fetch(url, options)
-  const responseText = await response.text()
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 20000)
+  let responseText
+
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal })
+    responseText = await response.text()
+    if (!response.ok) {
+      throw createError({
+        statusCode: 502,
+        statusMessage: 'Permintaan ke Google Apps Script gagal.',
+      })
+    }
+  } catch (error) {
+    if (error?.statusCode) throw error
+    if (controller.signal.aborted) {
+      throw createError({
+        statusCode: 504,
+        statusMessage: 'Google Apps Script terlalu lama merespons. Coba lagi.',
+      })
+    }
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'Tidak dapat terhubung ke Google Apps Script. Periksa koneksi dan coba lagi.',
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
+
   let result
 
   try {
@@ -37,7 +64,6 @@ export async function callAppsScript(event, action, params = {}, method = 'GET')
   }
 
   if (
-    !response.ok ||
     !result ||
     typeof result !== 'object' ||
     Array.isArray(result) ||

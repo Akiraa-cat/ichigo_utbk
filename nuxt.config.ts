@@ -11,6 +11,11 @@ export default defineNuxtConfig({
     appsScriptUrl: process.env.APPS_SCRIPT_URL || '',
     public: {},
   },
+  nitro: {
+    externals: {
+      inline: ['@lucide/vue'],
+    },
+  },
   app: {
     head: {
       htmlAttrs: { lang: 'id' },

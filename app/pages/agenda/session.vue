@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute } from '#imports'
-import { AlarmClock, ArrowLeft, Calendar, Check, CheckCircle2, Timer } from '@lucide/vue'
+import { AlarmClock, ArrowLeft, Calendar, Check, CheckCircle2, LoaderCircle, Timer } from '@lucide/vue'
 import { useApp } from '~/composables/useApp'
 import { SUBTEST_ORDER } from '~/utils/subtests.js'
 import { getTodayIso } from '~/utils/dateUtils.js'
@@ -19,6 +19,7 @@ const startTime = ref(existing.value?.startTime ?? '')
 const durationMinutes = ref(existing.value?.durationMinutes ?? null)
 const selectedSubtests = ref(existing.value?.subtests ?? [])
 const notes = ref(existing.value?.notes ?? '')
+const saving = ref(false)
 const readableDuration = computed(() => {
   if (!durationMinutes.value) return ''
   const hours = Math.floor(durationMinutes.value / 60)
@@ -33,15 +34,21 @@ function toggleSubtest(code) {
 }
 
 async function handleSubmit() {
-  if (await saveSession({
-    id: existing.value?.id,
-    date: date.value,
-    startTime: startTime.value,
-    durationMinutes: Number(durationMinutes.value),
-    subtests: selectedSubtests.value,
-    notes: notes.value.trim(),
-  })) {
-    goBackToTab()
+  if (saving.value) return
+  saving.value = true
+  try {
+    if (await saveSession({
+      id: existing.value?.id,
+      date: date.value,
+      startTime: startTime.value,
+      durationMinutes: Number(durationMinutes.value),
+      subtests: selectedSubtests.value,
+      notes: notes.value.trim(),
+    })) {
+      goBackToTab()
+    }
+  } finally {
+    saving.value = false
   }
 }
 </script>
@@ -107,9 +114,10 @@ async function handleSubmit() {
       <textarea id="study-notes" v-model="notes" rows="3" class="mt-2 w-full bg-paper border-2 border-ink rounded-lg p-3 text-sm text-ink resize-y" />
     </section>
 
-    <button type="submit" class="mt-5 h-12 bg-primary text-on-primary font-condensed text-lg font-bold uppercase border-2 border-ink rounded-lg manga-shadow flex items-center justify-center gap-2 cursor-pointer">
-      <CheckCircle2 class="w-5 h-5" />
-      SIMPAN SESI
+    <button type="submit" :disabled="saving" class="mt-5 h-12 bg-primary text-on-primary font-condensed text-lg font-bold uppercase border-2 border-ink rounded-lg manga-shadow flex items-center justify-center gap-2 cursor-pointer disabled:cursor-wait disabled:opacity-60">
+      <LoaderCircle v-if="saving" class="w-5 h-5 animate-spin motion-reduce:animate-none" />
+      <CheckCircle2 v-else class="w-5 h-5" />
+      {{ saving ? 'MENYIMPAN...' : 'SIMPAN SESI' }}
     </button>
   </form>
 </template>
